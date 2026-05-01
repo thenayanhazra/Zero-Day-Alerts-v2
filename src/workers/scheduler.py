@@ -7,14 +7,14 @@ from collections.abc import Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from src.storage.raw_event_store import InMemoryRawEventStore, RawEvent
+from src.storage.raw_event_store import RawEvent, RawEventStore
 
 logger = logging.getLogger(__name__)
 Collector = Callable[[], list[RawEvent]]
 
 
 class CollectorScheduler:
-    def __init__(self, collectors: list[Collector], store: InMemoryRawEventStore) -> None:
+    def __init__(self, collectors: list[Collector], store: RawEventStore) -> None:
         self.collectors = collectors
         self.store = store
         self.scheduler = BackgroundScheduler()
@@ -33,10 +33,13 @@ class CollectorScheduler:
             seconds=interval_seconds,
             id="collector-interval-job",
             replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
         self.scheduler.start()
         logger.info("collector scheduler started", extra={"interval_seconds": interval_seconds})
 
     def shutdown(self) -> None:
-        self.scheduler.shutdown(wait=False)
-        logger.info("collector scheduler stopped")
+        if self.scheduler.running:
+            self.scheduler.shutdown(wait=False)
+            logger.info("collector scheduler stopped")

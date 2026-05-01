@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Protocol
 
 
 @dataclass(slots=True)
@@ -9,6 +10,12 @@ class RawEvent:
     source: str
     title: str
     payload: dict
+
+
+class RawEventStore(Protocol):
+    """Storage contract for persisting raw collector events."""
+
+    def write_many(self, events: Iterable[RawEvent]) -> int: ...
 
 
 class InMemoryRawEventStore:

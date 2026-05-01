@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 
 import uvicorn
@@ -23,6 +24,7 @@ def bootstrap() -> CollectorScheduler:
     store = InMemoryRawEventStore()
     scheduler = CollectorScheduler(collectors=[sample_collector], store=store)
     scheduler.start(interval_seconds=120)
+    atexit.register(scheduler.shutdown)
     return scheduler
 
 
