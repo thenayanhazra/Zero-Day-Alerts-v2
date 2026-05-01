@@ -7,9 +7,9 @@ import logging
 
 import uvicorn
 
-from src.api.app import app
+from src.api.app import app, store
 from src.config import Settings
-from src.storage.raw_event_store import InMemoryRawEventStore, RawEvent
+from src.storage.raw_event_store import RawEvent
 from src.workers.scheduler import CollectorScheduler
 
 settings = Settings.from_env()
@@ -23,7 +23,6 @@ def sample_collector() -> list[RawEvent]:
 
 
 def bootstrap() -> CollectorScheduler:
-    store = InMemoryRawEventStore()
     scheduler = CollectorScheduler(collectors=[sample_collector], store=store)
     scheduler.start(interval_seconds=settings.scheduler_interval_seconds)
     atexit.register(scheduler.shutdown)

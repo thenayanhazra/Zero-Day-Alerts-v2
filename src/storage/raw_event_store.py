@@ -31,3 +31,6 @@ class InMemoryRawEventStore:
 
     def count(self) -> int:
         return len(self._events)
+
+    def all(self) -> list[RawEvent]:
+        return list(self._events)
