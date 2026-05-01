@@ -21,12 +21,23 @@ class CollectorScheduler:
 
     def _run_collectors(self) -> None:
         total = 0
+        failures = 0
         for collector in self.collectors:
-            events = collector()
-            total += self.store.write_many(events)
-        logger.info("collector run complete", extra={"raw_events_written": total})
+            try:
+                events = collector()
+                total += self.store.write_many(events)
+            except Exception:
+                failures += 1
+                logger.exception("collector execution failed", extra={"collector": getattr(collector, "__name__", "unknown")})
+        logger.info("collector run complete", extra={"raw_events_written": total, "collector_failures": failures})
 
     def start(self, interval_seconds: int = 60) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than zero")
+        if self.scheduler.running:
+            logger.info("collector scheduler already running")
+            return
+
         self.scheduler.add_job(
             self._run_collectors,
             trigger="interval",
