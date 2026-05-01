@@ -1,0 +1,11 @@
+scoring:
+  weights:
+    kev_presence: 35
+    active_exploitation_claims: 20
+    poc_availability: 12
+    exploit_kit_mention: 10
+    vendor_criticality: 15
+    source_trust_score: 8
+  tiers:
+    p1_min: 75
+    p2_min: 40
