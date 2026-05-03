@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
-from enum import StrEnum
+from datetime import datetime, time, timedelta, timezone
+from enum import Enum
 
 from .router import AlertEvent
 
 
-class AlertStatus(StrEnum):
+class AlertStatus(str, Enum):
     NEW = "new"
     SENT = "sent"
     ACKED = "acked"
@@ -60,7 +60,7 @@ class AlertPolicyEngine:
         self.maintenance_windows = maintenance_windows
 
     def evaluate(self, event: AlertEvent, state: AlertState | None, now: datetime | None = None) -> PolicyDecision:
-        now = now or datetime.now(UTC)
+        now = now or datetime.now(timezone.utc)
 
         if any(window.contains(now) for window in self.maintenance_windows):
             return PolicyDecision(False, "suppressed: maintenance window")
@@ -80,7 +80,7 @@ class AlertPolicyEngine:
         return PolicyDecision(True)
 
     def mark_sent(self, state: AlertState, now: datetime | None = None) -> AlertState:
-        now = now or datetime.now(UTC)
+        now = now or datetime.now(timezone.utc)
         if state.window_started_at is None or now - state.window_started_at >= self.frequency_window:
             state.window_started_at = now
             state.send_count_window = 0
@@ -93,5 +93,5 @@ class AlertPolicyEngine:
     def acknowledge(self, state: AlertState, actor: str, now: datetime | None = None) -> AlertState:
         state.status = AlertStatus.ACKED
         state.acked_by = actor
-        state.acked_at = now or datetime.now(UTC)
+        state.acked_at = now or datetime.now(timezone.utc)
         return state
