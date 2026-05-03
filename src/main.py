@@ -8,6 +8,8 @@ from collections.abc import Callable
 
 import uvicorn
 
+from src.alerts.router import AlertRouter
+from src.api.app import app, record_collector_run, register_alert_router, register_scheduler, store
 from src.api.app import app, store
 from src.collectors import GitHubCollector, OSINTFeedCollector, RSSForumCollector, XCollector
 from src.collectors.base import Collector as SourceCollector
@@ -73,6 +75,20 @@ def build_collectors(settings: Settings) -> list[Callable[[], list[RawEvent]]]:
 
 
 def bootstrap() -> CollectorScheduler:
+    alert_router = AlertRouter.from_config(
+        [
+            {"name": "critical-default", "channels": ["slack"], "severities": ["critical", "high"]},
+        ]
+    )
+    register_alert_router(alert_router)
+
+    scheduler = CollectorScheduler(
+        collectors=[sample_collector],
+        store=store,
+        run_observer=lambda successes, failures, run_at: record_collector_run(successes, failures, run_at),
+    )
+    scheduler.start(interval_seconds=settings.scheduler_interval_seconds)
+    register_scheduler(scheduler)
     collectors = build_collectors(settings)
     scheduler = CollectorScheduler(collectors=collectors, store=store)
     if collectors:
