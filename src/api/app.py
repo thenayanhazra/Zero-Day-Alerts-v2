@@ -6,10 +6,12 @@ from html import escape
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from src.storage.raw_event_store import InMemoryRawEventStore, RawEvent
+from src.config import Settings
+from src.storage import build_raw_event_store
+from src.storage.raw_event_store import RawEvent
 
 app = FastAPI(title="Zero-Day Alerts API", version="0.1.0")
-store = InMemoryRawEventStore()
+store = build_raw_event_store(Settings.from_env())
 
 
 def _seed_events() -> None:

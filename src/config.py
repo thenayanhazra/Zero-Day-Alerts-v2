@@ -14,6 +14,8 @@ class Settings:
     app_port: int = 8000
     scheduler_interval_seconds: int = 120
     log_level: str = "INFO"
+    storage_backend: str = "memory"
+    sqlite_path: str = "./data/zero_day_alerts.db"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -24,4 +26,6 @@ class Settings:
                 os.getenv("SCHEDULER_INTERVAL_SECONDS", str(cls.scheduler_interval_seconds))
             ),
             log_level=os.getenv("LOG_LEVEL", cls.log_level).upper(),
+            storage_backend=os.getenv("STORAGE_BACKEND", cls.storage_backend).lower(),
+            sqlite_path=os.getenv("SQLITE_PATH", cls.sqlite_path),
         )
