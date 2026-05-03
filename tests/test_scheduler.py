@@ -8,7 +8,7 @@ def test_run_collectors_writes_events() -> None:
     def collector() -> list[RawEvent]:
         return [RawEvent(source="unit", title="event", payload={"id": 1})]
 
-    scheduler = CollectorScheduler(collectors=[collector], store=store)
+    scheduler = CollectorScheduler(collectors=[collector], raw_store=store)
 
     scheduler._run_collectors()
 
@@ -24,7 +24,7 @@ def test_run_collectors_continues_when_one_collector_fails() -> None:
     def passing_collector() -> list[RawEvent]:
         return [RawEvent(source="unit", title="event", payload={"id": 2})]
 
-    scheduler = CollectorScheduler(collectors=[failing_collector, passing_collector], store=store)
+    scheduler = CollectorScheduler(collectors=[failing_collector, passing_collector], raw_store=store)
 
     scheduler._run_collectors()
 
@@ -32,7 +32,7 @@ def test_run_collectors_continues_when_one_collector_fails() -> None:
 
 
 def test_start_rejects_non_positive_interval() -> None:
-    scheduler = CollectorScheduler(collectors=[], store=InMemoryRawEventStore())
+    scheduler = CollectorScheduler(collectors=[], raw_store=InMemoryRawEventStore())
 
     try:
         scheduler.start(interval_seconds=0)
