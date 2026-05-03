@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -14,10 +15,16 @@ Collector = Callable[[], list[RawEvent]]
 
 
 class CollectorScheduler:
-    def __init__(self, collectors: list[Collector], store: RawEventStore) -> None:
+    def __init__(
+        self,
+        collectors: list[Collector],
+        store: RawEventStore,
+        run_observer: Callable[[int, int, datetime], None] | None = None,
+    ) -> None:
         self.collectors = collectors
         self.store = store
         self.scheduler = BackgroundScheduler()
+        self.run_observer = run_observer
 
     def _run_collectors(self) -> None:
         total = 0
@@ -29,6 +36,9 @@ class CollectorScheduler:
             except Exception:
                 failures += 1
                 logger.exception("collector execution failed", extra={"collector": getattr(collector, "__name__", "unknown")})
+        run_at = datetime.now(timezone.utc)
+        if self.run_observer is not None:
+            self.run_observer(total, failures, run_at)
         logger.info("collector run complete", extra={"raw_events_written": total, "collector_failures": failures})
 
     def start(self, interval_seconds: int = 60) -> None:

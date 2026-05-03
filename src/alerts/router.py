@@ -69,6 +69,10 @@ class AlertRouter:
             )
         return cls(routes)
 
+    @property
+    def route_count(self) -> int:
+        return len(self._routes)
+
     def route_event(self, event: AlertEvent) -> tuple[str, ...]:
         channels: list[str] = []
         for route in self._routes:

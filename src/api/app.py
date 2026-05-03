@@ -1,15 +1,61 @@
 """HTTP API application for service status endpoints and event dashboard."""
 
-from datetime import datetime, timezone
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from html import escape
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
+from src.alerts.router import AlertRouter
 from src.storage.raw_event_store import InMemoryRawEventStore, RawEvent
+from src.workers.scheduler import CollectorScheduler
 
 app = FastAPI(title="Zero-Day Alerts API", version="0.1.0")
 store = InMemoryRawEventStore()
+
+
+@dataclass(slots=True)
+class CollectorRunStatus:
+    """Status for the most recent collector cycle."""
+
+    timestamp: datetime
+    successes: int
+    failures: int
+
+
+@dataclass(slots=True)
+class ReadinessState:
+    """Mutable state used by readiness diagnostics."""
+
+    scheduler: CollectorScheduler | None = None
+    alert_router: AlertRouter | None = None
+    collector_runs: list[CollectorRunStatus] = field(default_factory=list)
+    collector_window: timedelta = field(default=timedelta(minutes=15))
+
+
+readiness_state = ReadinessState()
+
+
+def register_scheduler(scheduler: CollectorScheduler) -> None:
+    """Register scheduler dependency for readiness checks."""
+    readiness_state.scheduler = scheduler
+
+
+def register_alert_router(router: AlertRouter) -> None:
+    """Register alert router dependency for readiness checks."""
+    readiness_state.alert_router = router
+
+
+def record_collector_run(successes: int, failures: int, at: datetime | None = None) -> None:
+    """Record collector execution outcome for readiness checks."""
+    run = CollectorRunStatus(timestamp=at or datetime.now(timezone.utc), successes=successes, failures=failures)
+    readiness_state.collector_runs.append(run)
+    cutoff = run.timestamp - readiness_state.collector_window
+    readiness_state.collector_runs = [item for item in readiness_state.collector_runs if item.timestamp >= cutoff]
 
 
 def _seed_events() -> None:
@@ -39,10 +85,63 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _is_scheduler_running() -> bool:
+    return bool(readiness_state.scheduler and readiness_state.scheduler.scheduler.running)
+
+
+def _is_store_connected() -> bool:
+    try:
+        store.count()
+        return True
+    except Exception:
+        return False
+
+
+def _collector_window_summary(now: datetime) -> dict[str, Any]:
+    cutoff = now - readiness_state.collector_window
+    recent_runs = [run for run in readiness_state.collector_runs if run.timestamp >= cutoff]
+    total_successes = sum(run.successes for run in recent_runs)
+    total_failures = sum(run.failures for run in recent_runs)
+    return {
+        "window_seconds": int(readiness_state.collector_window.total_seconds()),
+        "runs": len(recent_runs),
+        "successes": total_successes,
+        "failures": total_failures,
+        "latest": recent_runs[-1].timestamp.isoformat() if recent_runs else None,
+        "healthy": bool(recent_runs) and total_successes > 0 and total_failures == 0,
+    }
+
+
+def _is_router_operational() -> bool:
+    router = readiness_state.alert_router
+    return router is not None and router.route_count > 0
+
+
 @app.get("/readiness")
-def readiness() -> dict[str, str]:
-    """Basic readiness check with timestamp."""
-    return {"status": "ready", "timestamp": datetime.now(timezone.utc).isoformat()}
+def readiness() -> dict[str, Any]:
+    """Readiness check with component diagnostics."""
+    now = datetime.now(timezone.utc)
+    collector = _collector_window_summary(now)
+
+    diagnostics = {
+        "scheduler": {"running": _is_scheduler_running()},
+        "store": {"connected": _is_store_connected()},
+        "collector": collector,
+        "alert_router": {"operational": _is_router_operational()},
+    }
+    critical_healthy = (
+        diagnostics["scheduler"]["running"]
+        and diagnostics["store"]["connected"]
+        and diagnostics["collector"]["healthy"]
+        and diagnostics["alert_router"]["operational"]
+    )
+
+    return {
+        "status": "ready" if critical_healthy else "not_ready",
+        "degraded": not critical_healthy,
+        "timestamp": now.isoformat(),
+        "diagnostics": diagnostics,
+    }
 
 
 @app.get("/events")
