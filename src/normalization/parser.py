@@ -3,7 +3,12 @@ from __future__ import annotations
 import ipaddress
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from hashlib import sha256
+
+from src.storage.raw_event_store import RawEvent
+
+from .schema import CanonicalEvent
 
 _CVE_PATTERN = re.compile(r"\bCVE-(\d{4})-(\d{4,7})\b", flags=re.IGNORECASE)
 _URL_PATTERN = re.compile(r"\bhttps?://[^\s<>'\"]+", flags=re.IGNORECASE)
@@ -97,6 +102,29 @@ def parse_indicators(text: str) -> ParsedIndicators:
         domains=domains,
         poc_available=poc_available,
         exploitation_in_wild=exploitation_in_wild,
+    )
+
+
+def normalize_raw_event(raw: RawEvent) -> CanonicalEvent:
+    payload = raw.payload or {}
+    text = "\n".join([raw.title, str(payload.get("description", "")), str(payload.get("summary", ""))])
+    indicators = parse_indicators(text)
+    event_id = stable_text_digest(f"{raw.source}|{raw.title}|{' '.join(indicators.cve_ids)}")[:20]
+    now = datetime.now(timezone.utc)
+
+    return CanonicalEvent(
+        event_id=f"evt-{event_id}",
+        title=raw.title,
+        description=str(payload.get("description") or payload.get("summary") or raw.title),
+        observed_at=now,
+        source_refs=indicators.urls,
+        cve_ids=indicators.cve_ids,
+        vendors=sorted({str(v) for v in payload.get("vendors", [payload.get("vendor")]) if v}),
+        products=sorted({str(p) for p in payload.get("products", [payload.get("product")]) if p}),
+        iocs=indicators.hashes + indicators.ips + indicators.domains,
+        poc_available=indicators.poc_available,
+        exploitation_in_wild=indicators.exploitation_in_wild,
+        confidence=float(payload.get("confidence", 0.5)),
     )
 
 

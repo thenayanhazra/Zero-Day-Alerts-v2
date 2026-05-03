@@ -56,6 +56,7 @@ def events() -> list[dict[str, object]]:
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> str:
     """Simple web dashboard showing captured zero-day events."""
+    refresh_interval_seconds = 10
     rows = "\n".join(
         "<tr>"
         f"<td>{escape(event.source)}</td>"
@@ -86,14 +87,64 @@ def dashboard() -> str:
     <body>
       <h1>Zero-Day Alerts</h1>
       <p class=\"subtitle\">Captured events currently held in memory: {store.count()}</p>
+      <p class=\"subtitle\">Refresh interval: <span id=\"refresh-interval\">{refresh_interval_seconds}</span> seconds · Last updated: <span id=\"last-updated\">Never</span></p>
       <table>
         <thead>
           <tr><th>Source</th><th>Title</th><th>Severity</th><th>Vendor</th></tr>
         </thead>
-        <tbody>
+        <tbody id=\"events-body\">
           {rows if rows else '<tr><td colspan="4">No events captured yet.</td></tr>'}
         </tbody>
       </table>
+      <script>
+        const refreshIntervalSeconds = {refresh_interval_seconds};
+        const eventsBody = document.getElementById('events-body');
+        const lastUpdated = document.getElementById('last-updated');
+
+        function cellWithText(value) {{
+          const td = document.createElement('td');
+          td.textContent = String(value);
+          return td;
+        }}
+
+        function renderRows(events) {{
+          eventsBody.replaceChildren();
+
+          if (!events.length) {{
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.colSpan = 4;
+            emptyCell.textContent = 'No events captured yet.';
+            emptyRow.appendChild(emptyCell);
+            eventsBody.appendChild(emptyRow);
+            return;
+          }}
+
+          [...events].reverse().forEach((event) => {{
+            const row = document.createElement('tr');
+            row.appendChild(cellWithText(event.source ?? ''));
+            row.appendChild(cellWithText(event.title ?? ''));
+            row.appendChild(cellWithText(event.payload?.severity ?? 'unknown'));
+            row.appendChild(cellWithText(event.payload?.vendor ?? 'unknown'));
+            eventsBody.appendChild(row);
+          }});
+        }}
+
+        async function refreshEvents() {{
+          try {{
+            const response = await fetch('/events', {{ headers: {{ Accept: 'application/json' }} }});
+            if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
+            const events = await response.json();
+            renderRows(Array.isArray(events) ? events : []);
+            lastUpdated.textContent = new Date().toLocaleTimeString();
+          }} catch (_err) {{
+            lastUpdated.textContent = 'Update failed';
+          }}
+        }}
+
+        refreshEvents();
+        setInterval(refreshEvents, refreshIntervalSeconds * 1000);
+      </script>
     </body>
     </html>
     """
