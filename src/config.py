@@ -20,6 +20,8 @@ class Settings:
     app_port: int = 8000
     scheduler_interval_seconds: int = 120
     log_level: str = "INFO"
+    storage_backend: str = "memory"
+    sqlite_path: str = "./data/zero_day_alerts.db"
     alert_sink_timeout_seconds: float = 5.0
     alert_sink_retry_count: int = 1
     alert_sink_email_enabled: bool = True
@@ -55,6 +57,8 @@ class Settings:
                 os.getenv("SCHEDULER_INTERVAL_SECONDS", str(cls.scheduler_interval_seconds))
             ),
             log_level=os.getenv("LOG_LEVEL", cls.log_level).upper(),
+            storage_backend=os.getenv("STORAGE_BACKEND", cls.storage_backend).lower(),
+            sqlite_path=os.getenv("SQLITE_PATH", cls.sqlite_path),
             alert_sink_timeout_seconds=float(
                 os.getenv("ALERT_SINK_TIMEOUT_SECONDS", str(cls.alert_sink_timeout_seconds))
             ),
